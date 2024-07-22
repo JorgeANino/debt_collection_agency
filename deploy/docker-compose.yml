@@ -1,0 +1,40 @@
+services:
+  web:
+    container_name: web
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    volumes:
+      - ..:/app
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    depends_on:
+      - db
+    networks:
+      - network
+    restart: unless-stopped
+
+  db:
+    container_name: db
+    image: postgres
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_HOST_AUTH_METHOD: trust
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    env_file:
+      - .env
+    networks:
+      - network
+
+volumes:
+  postgres_data:
+  static_volume:
+
+networks:
+  network:
+    driver: bridge
