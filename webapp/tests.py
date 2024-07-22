@@ -93,6 +93,69 @@ class AccountTests(TestCase):
         self.assertEqual(response.data["results"]
                          [0]["consumer"]["name"], "Jane Doe")
 
+    def test_filter_accounts_by_multiple_agencies(self):
+        # Create a second agency and associated client and accounts
+        second_agency = CollectionAgency.objects.create(name="Second Agency")
+        second_client = Client.objects.create(
+            reference_no="d984a3b4-d331-4857-8e6f-b44bad2567aa", agency=second_agency
+        )
+        consumer3 = Consumer.objects.create(
+            name="Alice Smith", address="789 Pine St", ssn="555-55-5555"
+        )
+        Account.objects.create(
+            balance=1500.00,
+            status="IN_COLLECTION",
+            consumer=consumer3,
+            client=second_client,
+        )
+
+        # Test filtering accounts by the first agency
+        response = self.client.get(f"{ACCOUNTS_URL}?agency_name=Test Agency")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data["results"]), 2)
+
+        # Test filtering accounts by the second agency
+        response = self.client.get(f"{ACCOUNTS_URL}?agency_name=Second Agency")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data["results"]), 1)
+        self.assertEqual(response.data["results"]
+                         [0]["consumer"]["name"], "Alice Smith")
+
+    def test_filter_accounts_across_multiple_agencies(self):
+        # Create a second agency and associated client and accounts
+        second_agency = CollectionAgency.objects.create(name="Second Agency")
+        second_client = Client.objects.create(
+            reference_no="d984a3b4-d331-4857-8e6f-b44bad2567aa", agency=second_agency
+        )
+        consumer3 = Consumer.objects.create(
+            name="Alice Smith", address="789 Pine St", ssn="555-55-5555"
+        )
+        Account.objects.create(
+            balance=1500.00,
+            status="IN_COLLECTION",
+            consumer=consumer3,
+            client=second_client,
+        )
+
+        # Test filtering accounts by consumer name across multiple agencies
+        response = self.client.get(
+            f"{ACCOUNTS_URL}?agency_name={self.agency.name},{second_agency.name}")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data["results"]), 3)
+        self.assertIn("John Doe", [account["consumer"]["name"]
+                      for account in response.data["results"]])
+        self.assertIn("Jane Doe", [account["consumer"]["name"]
+                      for account in response.data["results"]])
+        self.assertIn("Alice Smith", [account["consumer"]["name"]
+                      for account in response.data["results"]])
+
+
+class UploadCSVTests(TestCase):
+
+    def setUp(self):
+        self.client = APIClient()
+        self.agency = CollectionAgency.objects.create(name="Test Agency")
+
     def test_upload_csv(self):
         url = "/api/v1/upload/"
         csv_content = (
@@ -107,7 +170,51 @@ class AccountTests(TestCase):
         }
         response = self.client.post(url, data, format="multipart")
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(Account.objects.count(), 3)
+        self.assertEqual(Account.objects.count(), 1)
         self.assertEqual(
             Account.objects.filter(consumer__name="Anna Smith").exists(), True
+        )
+
+    def test_upload_csv_to_multiple_agencies(self):
+        # Create a second agency
+        second_agency = CollectionAgency.objects.create(name="Second Agency")
+
+        # Upload CSV for the first agency
+        url = "/api/v1/upload/"
+        csv_content_first = (
+            "client reference no,balance,status,consumer name,consumer address,ssn\n"
+            'ffeb5d88-e5af-45f0-9637-16ea469c58c0,1200.00,IN_COLLECTION,Anna Smith,"789 Oak St, Somecity, AA 12345",123-45-6780\n'
+        )
+        data_first = {
+            "file": SimpleUploadedFile(
+                "accounts_first.csv", csv_content_first.encode(), content_type="text/csv"
+            ),
+            "agency_name": self.agency.name,
+        }
+        response_first = self.client.post(url, data_first, format="multipart")
+        self.assertEqual(response_first.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(Account.objects.count(), 1)
+        self.assertEqual(
+            Account.objects.filter(
+                consumer__name="Anna Smith", client__agency=self.agency).exists(), True
+        )
+
+        # Upload CSV for the second agency
+        csv_content_second = (
+            "client reference no,balance,status,consumer name,consumer address,ssn\n"
+            'd984a3b4-d331-4857-8e6f-b44bad2567aa,1300.00,PAID_IN_FULL,Bob Johnson,"321 Elm St, Anothercity, BB 54321",678-90-1234\n'
+        )
+        data_second = {
+            "file": SimpleUploadedFile(
+                "accounts_second.csv", csv_content_second.encode(), content_type="text/csv"
+            ),
+            "agency_name": second_agency.name,
+        }
+        response_second = self.client.post(
+            url, data_second, format="multipart")
+        self.assertEqual(response_second.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(Account.objects.count(), 2)
+        self.assertEqual(
+            Account.objects.filter(
+                consumer__name="Bob Johnson", client__agency=second_agency).exists(), True
         )

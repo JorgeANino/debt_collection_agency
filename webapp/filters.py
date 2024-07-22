@@ -11,8 +11,7 @@ class AccountFilter(django_filters.FilterSet):
         field_name="consumer__name", lookup_expr="icontains")
     status = django_filters.CharFilter(
         field_name="status", lookup_expr="iexact")
-    agency_name = django_filters.CharFilter(
-        field_name="client__agency__name", lookup_expr="icontains")
+    agency_name = django_filters.CharFilter(method='filter_by_agency_name')
     client_reference_no = django_filters.UUIDFilter(
         field_name="client__reference_no")
     consumer_ssn = django_filters.CharFilter(
@@ -20,5 +19,11 @@ class AccountFilter(django_filters.FilterSet):
 
     class Meta:
         model = Account
-        fields = ["min_balance", "max_balance", "consumer_name",
-                  "status", "agency_name", "client_reference_no", "consumer_ssn"]
+        fields = [
+            "min_balance", "max_balance", "consumer_name",
+            "status", "agency_name", "client_reference_no", "consumer_ssn"
+        ]
+
+    def filter_by_agency_name(self, queryset, name, value):
+        agency_names = value.split(',')
+        return queryset.filter(client__agency__name__in=agency_names)

@@ -35,13 +35,8 @@ class CSVUploadView(views.APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        try:
-            agency, _ = CollectionAgency.objects.get_or_create(
-                name=agency_name)
-        except CollectionAgency.DoesNotExist:
-            return Response(
-                {"error": "Agency does not exist"}, status=status.HTTP_400_BAD_REQUEST
-            )
+        agency, _ = CollectionAgency.objects.get_or_create(
+            name=agency_name)
 
         decoded_file = file.read().decode("utf-8").splitlines()
         reader = csv.DictReader(decoded_file)
