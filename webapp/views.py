@@ -1,5 +1,7 @@
 import csv
 
+from django.db.models import Prefetch
+
 from rest_framework import generics, status, views
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.response import Response
@@ -12,10 +14,15 @@ from webapp.filters import AccountFilter
 
 
 class AccountListView(generics.ListAPIView):
-    queryset = Account.objects.all()
     serializer_class = AccountSerializer
     filter_backends = [DjangoFilterBackend]
     filterset_class = AccountFilter
+
+    def get_queryset(self):
+        clients_with_agencies = Client.objects.select_related('agency')
+        return Account.objects.select_related('consumer').prefetch_related(
+            Prefetch('client', queryset=clients_with_agencies)
+        ).all()
 
 
 class CSVUploadView(views.APIView):
